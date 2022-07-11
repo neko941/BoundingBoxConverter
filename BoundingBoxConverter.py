@@ -93,6 +93,11 @@ class BoundingBoxConverter():
     def retrieveLabelIndex(self, label):
         return self.classes.index(label)
 
+    def changeLabelFormat(self):
+        assert self.classes, "Please use .addClasses before continuing"
+        for index, l in enumerate(self.labels):
+            self.labels[index] = self.retrieveLabelIndex(l) 
+
     def export(self, format, save=False):
         if format.lower() == "pascalvoc":
             assert (all([self.width, self.height, self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled]))
@@ -104,7 +109,6 @@ class BoundingBoxConverter():
                 assert all([self.width, self.height, self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights])
                 self.PascalVOC_to_YOLO()
                 if save:
-                    for index, l in enumerate(self.labels):
-                        self.labels[index] = self.retrieveLabelIndex(l) 
+                    self.changeLabelFormat()
                     self.save(format=format)
             return self, [(x, y, w, h) for x, y, w, h in zip(self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled)]
