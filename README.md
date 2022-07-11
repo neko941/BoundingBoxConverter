@@ -1,6 +1,12 @@
-# Requirements
+# Installation
 ```
-!pip install -r requirements.txt
+!git clone https://github.com/neko941/BoundingBoxConverter
+```
+```
+!pip install -r BoundingBoxConverter/requirements.txt
+```
+```python
+from BoundingBoxConverter.BoundingBoxConverter import BoundingBoxConverter
 ```
 
 # Usage
