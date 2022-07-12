@@ -11,6 +11,10 @@ class BoundingBoxConverter():
         self.xBottomRights = []
         self.yBottomRights = []
 
+        """ COCO Format """
+        self.widthBBoxes = []
+        self.heightBBoxes = []
+
         """ YOLO Format """
         self.xCenterScaled = []
         self.yCenterScaled = []
@@ -40,15 +44,34 @@ class BoundingBoxConverter():
         self.widthScaled.extend([((y1 + y2)/2.0 - 1) * (1./self.height) for y1, y2 in zip(self.yTopLefts, self.yBottomRights)])
         self.heightScaled.extend([(y2 - y1) * (1./self.width) for y1, y2 in zip(self.yTopLefts, self.yBottomRights)])
 
-    def addBoundingBox(self, format, labelFilePath=None):
-        self.labelFilePath = labelFilePath
-        self.labelFileName = Path(labelFilePath).stem
+    def COCO_to_YOLO(self):
+        self.xCenterScaled.extend([(2 * x1 + w)/(2 * self.width) for x1, w in zip(self.xTopLefts, self.widthBBoxes)])
+        self.yCenterScaled.extend([(2 * y1 + h)/(2 * self.height) for y1, h in zip(self.yTopLefts, self.heightBBoxes)])
+        self.widthScaled.extend([w / self.width for w in self.widthBBoxes])
+        self.heightScaled.extend([h / self.height for h in self.heightBBoxes])
+
+
+    def addBoundingBox(self, format, bbox=None, labelFilePath=None):
+        if labelFilePath:
+            self.labelFilePath = labelFilePath
+            self.labelFileName = Path(labelFilePath).stem
 
         if format.lower().replace(" ", "") == "yolo":
             if labelFilePath and labelFilePath.endswith(".txt"):
-                lines = open(labelFilePath, "r").readlines()
-                lines = np.array([line.strip().split(" ") for line in lines], dtype=float)
+                lines = np.array([line.strip().split(" ") for line in open(labelFilePath, "r").readlines()], dtype=float)
+            
+            elif bbox and isinstance(bbox, list):
+                if all(isinstance(i, list) for i in bbox):
+                    lines = np.array(bbox, dtype=float)
+                elif all(isinstance(i, str) for i in bbox):
+                    lines = np.array([i.strip().split(" ") for i in bbox], dtype=float)
 
+            if len(lines[0]) == 4:
+                self.xCenterScaled.extend(lines[:, 0])
+                self.yCenterScaled.extend(lines[:, 1])
+                self.widthScaled.extend(lines[:, 2])
+                self.heightScaled.extend(lines[:, 3])
+            elif len(lines[0]) == 5:
                 self.labels.extend([int(label) for label in lines[:, 0]])
                 self.xCenterScaled.extend(lines[:, 1])
                 self.yCenterScaled.extend(lines[:, 2])
@@ -86,29 +109,58 @@ class BoundingBoxConverter():
             file = open(f"{self.labelFileName}.txt", "w")
             file.writelines([f"{l} {x} {y} {w} {h}\n" for l, x, y, w, h in zip(self.labels, self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled)])
 
+        elif format.lower() == "pascalvoc":
+            pass
+
     def addClasses(self, classes):
-        self.classes.extend(classes)
+        if isinstance(classes, list):
+            self.classes.extend(classes)
+
+        elif isinstance(classes, str) and classes.endswith(".txt"):
+            self.classes.extend([line.replace(" ", "").replace("\n", "").split(",") for line in open(classes, "r").readlines()])
+            print(self.classes)
         return self
 
     def retrieveLabelIndex(self, label):
         return self.classes.index(label)
 
-    def changeLabelFormat(self):
-        assert self.classes, "Please use .addClasses before continuing"
-        for index, l in enumerate(self.labels):
-            self.labels[index] = self.retrieveLabelIndex(l) 
+    def retrieveLabelName(self, label):
+        return self.classes[label]
+
+    def changeLabelFormat(self, reverse=False):
+        assert self.classes, "Please provide classes using .addClasses before continuing"
+        if reverse:
+            for index, l in enumerate(self.labels):
+                self.labels[index] = self.retrieveLabelName(l) 
+        else:
+            for index, l in enumerate(self.labels):
+                self.labels[index] = self.retrieveLabelIndex(l) 
 
     def export(self, format, save=False):
         if format.lower() == "pascalvoc":
-            assert (all([self.width, self.height, self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled]))
-            self.YOLO_to_PascalVOC()
+            if not all([self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights]):
+                if all([self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled]):
+                    assert all([self.width, self.height]), "Please provide image shape using .addImageShape before continuing"
+                    assert (all([self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled]))
+                    self.YOLO_to_PascalVOC()
+
+            if save:
+                if all(isinstance(x, int) for x in self.labels):
+                    self.changeLabelFormat(reverse=True)
+                self.save(format=format)
+
             return self, [(x1, y1, x2, y2) for x1, y1, x2, y2 in zip(self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights)]
 
-        if format.lower() == "yolo":
-            if all([self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights]):
-                assert all([self.width, self.height, self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights])
-                self.PascalVOC_to_YOLO()
-                if save:
+        elif format.lower() == "yolo":
+            if not all([self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled]):
+                if all([self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights]):
+                    assert all([self.width, self.height]), "Please provide image shape using .addImageShape before continuing"
+                    assert all([self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights])
+                    self.PascalVOC_to_YOLO()
+
+            if save:
+                if all(isinstance(x, str) for x in self.labels):
                     self.changeLabelFormat()
-                    self.save(format=format)
+                self.save(format=format)
+
             return self, [(x, y, w, h) for x, y, w, h in zip(self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled)]
