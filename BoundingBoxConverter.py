@@ -111,7 +111,7 @@ class BoundingBoxConverter():
 
     def save(self, format):
         if format.lower() == "yolo":
-            file = open(f"{self.labelFileName}.txt", "w")
+            file = open(f"{os.path.join(self.labelDirectory, self.labelFileName)}.txt", "w")
             file.writelines([f"{l} {x} {y} {w} {h}\n" for l, x, y, w, h in zip(self.labels, self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled)])
 
         elif format.lower() == "pascalvoc":
