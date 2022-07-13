@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 from pathlib import Path
@@ -29,8 +30,12 @@ class BoundingBoxConverter():
         """ Label """
         self.labels = []
         self.classes = []
+        self.labelDirectory = None
         self.labelFilePath = None
         self.labelFileName = None
+
+    def addLabelDirectory(self, labelDirectory):
+        self.labelDirectory = labelDirectory
 
     def YOLO_to_PascalVOC(self):
         self.xTopLefts.extend([0 if (x - w / 2) * self.width < 0 else int((x - w / 2) * self.width) + 1 for x, w in zip(self.xCenterScaled, self.widthScaled)])
@@ -137,6 +142,9 @@ class BoundingBoxConverter():
                 self.labels[index] = self.retrieveLabelIndex(l) 
 
     def export(self, format, save=False):
+        if not self.labelDirectory and self.labelFilePath:
+            self.labelDirectory = os.path.dirname(self.labelFilePath)
+
         if format.lower() == "pascalvoc":
             if not all([self.xTopLefts, self.yTopLefts, self.xBottomRights, self.yBottomRights]):
                 if all([self.xCenterScaled, self.yCenterScaled, self.widthScaled, self.heightScaled]):
